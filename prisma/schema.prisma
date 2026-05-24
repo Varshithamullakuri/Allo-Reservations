@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  RELEASED
+  EXPIRED
+
+  @@map("reservation_status")
+}
+
+model Product {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String        @db.VarChar
+  description  String?
+  sku          String        @unique @db.VarChar
+  createdAt    DateTime      @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime?     @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  inventories  Inventory[]
+  reservations Reservation[]
+
+  @@index([sku])
+  @@map("products")
+}
+
+model Warehouse {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  city         String
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  inventories  Inventory[]
+  reservations Reservation[]
+
+  @@unique([name, city], map: "warehouses_name_city_unique")
+  @@map("warehouses")
+}
+
+model Inventory {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId     String        @map("product_id") @db.Uuid
+  warehouseId   String        @map("warehouse_id") @db.Uuid
+  totalStock    Int           @default(0) @map("total_stock")
+  reservedStock Int           @default(0) @map("reserved_stock")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  product       Product       @relation(fields: [productId], references: [id])
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  reservations  Reservation[]
+
+  @@unique([productId, warehouseId], map: "inventory_product_warehouse_unique")
+  @@index([productId])
+  @@index([warehouseId])
+  @@map("inventory")
+}
+
+model Reservation {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId   String            @map("product_id") @db.Uuid
+  warehouseId String            @map("warehouse_id") @db.Uuid
+  quantity    Int
+  status      ReservationStatus @default(PENDING)
+  expiresAt   DateTime          @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  inventory   Inventory         @relation(fields: [productId, warehouseId], references: [productId, warehouseId], map: "reservations_inventory_fk")
+  product     Product           @relation(fields: [productId], references: [id], map: "reservations_product_fk")
+  warehouse   Warehouse         @relation(fields: [warehouseId], references: [id], map: "reservations_warehouse_fk")
+
+  @@index([status, expiresAt])
+  @@map("reservations")
+}
